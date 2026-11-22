@@ -1,0 +1,11 @@
+import {build} from 'esbuild';
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
+const policy=await readFile(new URL('../lib/production-policy.mjs',import.meta.url),'utf8');
+await writeFile(new URL('../public/policy.js',import.meta.url),policy.replace(/^export /gm,'')+'\nglobalThis.ProductionPolicy=ProductionPolicy;\n');
+const history=await readFile(new URL('../lib/history-workbook.mjs',import.meta.url),'utf8');
+await writeFile(new URL('../public/history-tools.js',import.meta.url),history.replace('export const HistoryTools=','globalThis.HistoryTools='));
+const math=await readFile(new URL('../lib/projection/math.mjs',import.meta.url),'utf8');
+await writeFile(new URL('../public/projection-math.js',import.meta.url),math.replace(/^export /gm,'')+'\nglobalThis.ZeroDelayMath={DEFAULT_COSTS,validDate,addDate,integer,normalizeCosts,heCosts,normalizePlan,scheduled,project,csvRows,exportCsv};');
+await mkdir(new URL('../dist/server/',import.meta.url),{recursive:true});
+await build({entryPoints:[new URL('../server/index.ts',import.meta.url).pathname],bundle:true,platform:'node',format:'esm',target:'node22',packages:'external',outfile:new URL('../dist/server/index.js',import.meta.url).pathname});
+console.log('Node.js application built.');
