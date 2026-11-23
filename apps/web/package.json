@@ -1,0 +1,30 @@
+{
+  "name": "@panel/web",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "next build --webpack",
+    "dev": "next dev --port 3000",
+    "start": "next start --port 3000",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:auth": "node --import tsx --test --test-concurrency=1 test/*.integration.ts"
+  },
+  "dependencies": {
+    "@panel/contracts": "file:../../packages/contracts",
+    "@panel/domain": "file:../../packages/domain",
+    "jose": "6.2.18",
+    "openid-client": "6.9.1",
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "redis": "6.3.1"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "tsx": "4.23.15",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3"
+  }
+}

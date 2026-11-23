@@ -1,0 +1,68 @@
+{
+  "clientId": "example-client",
+  "groupsClaim": "groups",
+  "scopeClaim": "unitScopes",
+  "grants": [
+    {
+      "role": "example-reader",
+      "groups": ["/example/approved"],
+      "permissions": ["production.read", "stops.read", "plans.read"],
+      "global": false
+    },
+    {
+      "role": "example-editor",
+      "groups": ["/example/approved", "/example/editors"],
+      "permissions": [
+        "production.read",
+        "production.create",
+        "production.edit.own",
+        "stops.read",
+        "stops.create",
+        "stops.edit.own",
+        "plans.read"
+      ],
+      "global": false
+    },
+    {
+      "role": "example-manager",
+      "groups": ["/example/approved", "/example/managers"],
+      "permissions": [
+        "production.read",
+        "production.create",
+        "production.edit.any",
+        "production.backdate",
+        "stops.read",
+        "stops.create",
+        "stops.edit.any",
+        "targets.manage",
+        "plans.read",
+        "plans.manage",
+        "audit.read",
+        "reports.export",
+        "reports.email"
+      ],
+      "global": false
+    },
+    {
+      "role": "example-administrator",
+      "groups": ["/example/approved", "/example/system-admins"],
+      "permissions": [
+        "organization.manage",
+        "production.read",
+        "production.create",
+        "production.edit.any",
+        "production.backdate",
+        "stops.read",
+        "stops.create",
+        "stops.edit.any",
+        "targets.manage",
+        "plans.read",
+        "plans.manage",
+        "audit.read",
+        "reports.export",
+        "reports.email"
+      ],
+      "global": true
+    }
+  ]
+}

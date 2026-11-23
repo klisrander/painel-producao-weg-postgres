@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: replace-me-production
+resources: [../../base]
+images:
+  - name: PANEL_API
+    newName: registry.example.invalid/panel/api
+    newTag: REPLACE_ME_COMMIT
+  - name: PANEL_WEB
+    newName: registry.example.invalid/panel/web
+    newTag: REPLACE_ME_COMMIT
+  - name: PANEL_MIGRATIONS
+    newName: registry.example.invalid/panel/migrations
+    newTag: REPLACE_ME_COMMIT

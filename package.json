@@ -1,29 +1,35 @@
 {
   "name": "painel-producao-weg-postgres",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "node --env-file=.env --import tsx --watch server/index.ts",
-    "build": "node scripts/build.mjs",
-    "start": "node dist/server/index.js",
-    "db:migrate": "node scripts/migrate.mjs",
-    "user:provision": "node scripts/provision-user.mjs",
-    "data:import": "node scripts/import-backup.mjs",
-    "test": "node --import tsx --test tests/*.test.mjs",
-    "test:integration": "node --import tsx --test tests/*.integration.mjs"
+    "generate": "npm run generate -w apps/api",
+    "build": "npm run build -w packages/contracts && npm run build -w packages/domain && npm run build -w apps/api && npm run build -w apps/web",
+    "test": "npm run test -w apps/api && npm run test -w apps/web",
+    "test:integration": "npm run test:integration -w apps/api",
+    "dev:api": "npm run dev -w apps/api",
+    "dev:web": "npm run dev -w apps/web",
+    "db:deploy": "npm run db:deploy -w apps/api",
+    "db:validate": "npm run db:validate -w apps/api",
+    "typecheck:tools": "tsc -p scripts/tsconfig.json",
+    "test:auth": "npm run test:auth -w apps/web",
+    "import:legacy": "node --import tsx scripts/v2/import-legacy.ts",
+    "test:ui": "node scripts/v2/ui-smoke.mjs"
   },
-  "dependencies": {
-    "jose": "6.2.18",
-    "openid-client": "6.9.1",
-    "pg": "8.23.1"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "esbuild": "0.28.2",
-    "linkedom": "0.18.15",
-    "tsx": "4.23.15"
+    "playwright": "1.62.1"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "overrides": {
+    "deepmerge-ts": "8.0.0",
+    "effect": "3.22.5"
   }
 }

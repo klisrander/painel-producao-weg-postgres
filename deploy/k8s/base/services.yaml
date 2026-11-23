@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: panel-api
+spec:
+  selector: { app: panel-api }
+  ports: [{ port: 4000, targetPort: 4000 }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: panel-web
+spec:
+  selector: { app: panel-web }
+  ports: [{ port: 3000, targetPort: 3000 }]

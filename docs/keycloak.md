@@ -1,31 +1,48 @@
-# Keycloak e autenticação Windows
+# Keycloak, WBS e autenticação corporativa
 
-A aplicação é um cliente web confidencial OIDC. O navegador recebe um cookie opaco da aplicação, não tokens de acesso. O fluxo usa Authorization Code, PKCE S256, state e nonce. As respostas JWT têm assinatura verificada com as chaves publicadas pelo realm, além de issuer, audience e validade.
+Esta implementação usa OIDC padrão para Keycloak. **Ainda não foi comparada aos templates privados do WEG Developers Portal**, nem conectada ao realm real. A aprovação final e eventuais ajustes ao padrão oficial dependem da TI.
 
-## Cadastro do cliente pela TI
+## Contrato com o provedor
 
-1. Criar cliente OpenID Connect confidencial, com autenticação de cliente por `client_secret_basic` e Standard Flow habilitado.
-2. Manter Implicit Flow e Direct Access Grants desabilitados. Exigir PKCE S256 e ID tokens assinados com RS256.
-3. Registrar exatamente `APP_ORIGIN/auth/callback` como URI de redirecionamento; não usar curingas. Configurar o endereço da aplicação e as origens conforme as regras corporativas.
-4. Configurar `APP_ORIGIN/auth/backchannel-logout` como URL de backchannel logout e incluir o identificador da sessão (`sid`) no ID token. Permitir conectividade do Keycloak até esse endpoint.
-5. Entregar issuer, client ID e segredo pelo canal de configuração aprovado. O segredo não deve ir para o GitHub nem para o frontend.
+A TI deve fornecer issuer/realm, client ID Web confidencial, segredo no cofre, audience da API, client de introspecção, URLs permitidas e certificado/cadeia corporativa. Registrar:
 
-## Windows / AD / Kerberos
+- Redirect URI exata: `https://DOMINIO_WEG/api/auth/callback`.
+- Post logout redirect URI: `https://DOMINIO_WEG/` (mesma origem de `APP_URL`).
+- Backchannel logout: `https://DOMINIO_WEG/api/auth/backchannel`, com logout por sessão habilitado.
+- Fluxo Authorization Code; PKCE S256 obrigatório; sem fluxo implícito ou password grant na aplicação.
+- Scopes utilizados: `openid profile`. E-mail não é necessário para identificar/autenticar usuários.
+- Audience específica da API presente no access token. Não aceitar o ID token como credencial da API.
 
-A TI conecta o realm à federação/diretório e ao fluxo de autenticação Windows que a WEG já administra. Conforme a política corporativa, isso pode envolver Active Directory, Kerberos/SPNEGO, provedores federados e configuração dos navegadores/zonas de intranet. Essas configurações ficam no Keycloak e na infraestrutura da WEG, não no código JavaScript do painel.
+A autenticação Windows/AD/Kerberos é realizada pela federação já existente no Keycloak WEG. A aplicação não coleta senha Windows e não implementa validação própria de AD.
 
-A aplicação não confia em cabeçalhos como `X-Remote-User` ou `X-Windows-User` e não tenta ler o usuário do Windows no navegador. Ela aceita a identidade validada pelo Keycloak.
+## Concessão pelo WBS
 
-## Identidade e permissões
+Copiar o contrato vazio de `config/access-mapping.example.json` para arquivo privado ou ConfigMap. `config/access-mapping.synthetic.json` contém apenas exemplos fictícios para demonstrar o formato; **não são nomes de roles/grupos WEG**.
 
-O vínculo é a combinação **issuer + sub**, não e-mail ou nome de usuário. Uma identidade autenticada ainda precisa de cadastro ativo no painel. Não há criação automática nem promoção a administrador a partir de atributos enviados pelo navegador.
+Cada concessão exige o papel em `realm_access.roles` ou `resource_access[clientId].roles` **e todos os grupos** listados na regra. Grupos e escopos de unidade são arrays de strings em claims cujo caminho é configurável. A claim de unidades deve corresponder a `Unit.accessKey`. Não confundir essa claim com o scope OAuth textual.
 
-Os perfis, turnos, seções e permissões operacionais são mantidos no painel. O primeiro administrador é cadastrado pela TI via `user:provision`; os demais podem ser cadastrados pelo administrador com o `sub` fornecido pela TI. O vínculo do sujeito é imutável na interface, para preservar autoria e evitar troca de identidade acidental. Alterações controladas de vínculos históricos usam a ferramenta de provisionamento offline.
+Para administrar a estrutura global, são necessários simultaneamente:
 
-## Sessões e saída
+1. Role e grupos externos aprovados com `organization.manage` e `global: true` no mapeamento de configuração.
+2. Escopo externo `*` emitido pelo provedor.
 
-A sessão é registrada no PostgreSQL. O cookie de produção usa `__Host-`, `Secure`, `HttpOnly`, `SameSite=Lax` e `Path=/`. Ela expira após **15 minutos sem atividade** ou, no máximo, 8 horas após a entrada. A expiração é aplicada no servidor e nas páginas do painel, ajuda e acompanhamentos.
+Somente o caractere `*`, somente um grupo, somente uma role ou apenas um registro `Actor` no banco não conferem administração. O arquivo de mapeamento traduz permissões técnicas; não contém lista de usuários. A inclusão/remoção de pessoas em roles/grupos e escopos ocorre no WBS, por chamado, fora desta aplicação.
 
-**Sair** encerra a sessão deste aplicativo. Não encerra a sessão do Windows nem força logout em outros sistemas corporativos. Se o Keycloak enviar um logout por backchannel válido, as sessões correspondentes também são invalidadas. O backchannel valida assinatura, issuer, audience, iat, jti/evento e sujeito/sessão; a mensagem pode ser repetida sem reaplicar a operação.
+Permissões disponíveis estão em `packages/contracts/src/index.ts`. A TI deve aprovar a matriz correspondente a operador, analista, gestor, gerente e administrador; os nomes dos cargos não são inferidos de texto enviado pelo navegador. `targets.manage` controla CAP/metas, `plans.manage` controla cenários, e `production.backdate` controla lançamento fora do turno atual. A API valida o escopo novamente, mesmo que alguém modifique a interface.
 
-A TI deve homologar o comportamento com seu tempo de SSO, rotação de chaves, desativação de contas e políticas de logout. A desativação local de um usuário invalida suas sessões; políticas de diretório devem ser propagadas pelo Keycloak/integração corporativa.
+## Sessões e revogação
+
+- Cookie opaco aleatório, HttpOnly, SameSite=Lax, `__Host-` e Secure em produção; não há tokens em localStorage ou respostas para a interface.
+- Redis compartilhado entre réplicas; TLS obrigatório em produção. Tokens são cifrados com AES-256-GCM por chave do cofre.
+- Fluxos OIDC duram 10 minutos, usam binding de navegador e são consumidos uma vez. Validação de state, nonce, PKCE e assinatura de ID token é explícita.
+- Inatividade de 15 minutos e duração máxima de 8 horas. Atualizações de dados e refresh de tokens não contam como interação. Eventos reais de teclado/toque/clique/rolagem renovam a atividade com frequência limitada.
+- Refresh usa lock distribuído no Redis para evitar reutilizar refresh tokens rotacionados em duas réplicas.
+- Logout local elimina a sessão e inicia o logout do provedor. Backchannel valida assinatura, issuer, audience, idade, eventos e replay antes de invalidar sessões correspondentes.
+- A API verifica assinatura/issuer/audience/expiração do JWT. Em produção também exige introspecção no Keycloak para rejeitar tokens revogados. A TI deve confirmar como mudanças WBS passam a constar nos tokens e o SLA de revogação; introspecção não reescreve claims antigas por si só.
+- Nenhum caminho permite login local emergencial. Falhas de Keycloak/Redis bloqueiam o acesso.
+
+`OIDC_ALLOW_HTTP_TEST` só é considerado com `NODE_ENV=test` e issuer em loopback, para testes locais. Produção exige HTTPS. Nunca desative validação de certificado. Caso a WEG use CA privada, instale a cadeia aprovada na imagem/ambiente, por exemplo via `NODE_EXTRA_CA_CERTS`.
+
+## Homologação obrigatória
+
+Testar login Windows, MFA se aplicável, criação/remoção de acesso por chamado, scopes de unidades, operador sem permissão de edição ampla, administrador global, logout local/SSO/backchannel, múltiplas réplicas, inatividade, rotação de segredo e indisponibilidade do provedor. Os testes com provedor simulado não comprovam esses fluxos na WEG.

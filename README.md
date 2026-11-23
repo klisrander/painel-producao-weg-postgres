@@ -1,80 +1,78 @@
-# Painel de Produção — PostgreSQL e Keycloak
+# Painel de produção — base corporativa
 
-Versão independente do painel de operações industriais, preparada para hospedagem corporativa com **Node.js 22**, **PostgreSQL** e **Keycloak via OpenID Connect**.
+Aplicação separada da versão atualmente em operação. Esta base usa **Next.js/React/TypeScript**, **NestJS/TypeScript**, **Prisma** e **PostgreSQL**. A autenticação é delegada ao **Keycloak**, e o acesso vem de roles, grupos e escopos externos do WBS. Não existem cadastro local de senhas, tabela de permissões, aprovação local de usuários ou flag de administrador.
 
-O projeto mantém as telas de produção, perturbações, metas por turno, CAP/eficiência, histórico com Excel, permissões por seção, auditoria, evolução dos três turnos e Projeção Zero Atraso. A interface continua adaptada para computador, tablet e celular.
+**Estado:** implementação genérica preparada para integração; não publicada nem homologada na infraestrutura WEG. Os modelos oficiais do Developers Portal e os nomes reais de claims/grupos ainda precisam ser fornecidos e conferidos pela TI. Os exemplos deste repositório não representam padrões oficiais WEG.
 
-Este repositório foi iniciado com histórico próprio. Não altera o repositório ou a hospedagem anteriores. **Não contém o banco de produção, senhas, contas de funcionários, registros operacionais, arquivos de ambiente ou catálogos internos.** Os catálogos incluídos são exemplos genéricos; a configuração real é montada separadamente.
+## Entregas
 
-A aplicação não usa envio de e-mail, senha local ou recuperação de senha. O botão **Entrar com conta WEG** redireciona ao Keycloak. A integração com Windows/Active Directory/Kerberos é realizada pela infraestrutura de identidade da WEG no Keycloak, sem capturar a senha do Windows na aplicação.
+- Modelo lógico e físico normalizado: organização → unidade → fábrica → área → linha; etapas, equipamentos e turnos pertencem ao contexto correto.
+- Lançamentos de produção e paradas, edição com autorização no servidor, paginação e auditoria. Horários reais são opcionais em relatórios antigos; o sistema não inventa horários.
+- CAP e metas versionadas por linha, etapa, turno e vigência. O histórico referencia a versão usada no lançamento.
+- Evolução conjunta dos turnos, detalhes, indicadores, CSV e projeções de recuperação do atraso com cenários, revisões, ações e custos. Exportação Excel da projeção com gráfico.
+- Interface responsiva com dicionários em português, inglês e espanhol e traduções de nomes de etapas e motivos.
+- OIDC Authorization Code + PKCE, state, nonce e assinatura do ID token. Tokens ficam cifrados em sessões técnicas no Redis, sem acesso pelo JavaScript do navegador. Redis não administra identidade nem concessões.
+- Roles **e** grupos externos são exigidos conjuntamente; o escopo de unidade é validado em cada consulta e alteração. Não há papel administrador implícito. Introspecção de tokens é obrigatória em produção.
+- E-mail operacional por SMTP com TLS e fila transacional. Não existe recuperação de senha local. Envio desativado por padrão.
+- Dockerfiles, pipeline GitLab e manifestos Kubernetes/Kustomize com ambientes de homologação e produção. A integração com os templates/esteiras oficiais WEG permanece pendente.
+- Importador offline dos backups legados: simulação, validação de vínculos, transação, referências idempotentes e verificação de alteração da origem. Dados reais ficam fora do Git.
 
-## O que falta fornecer pela TI
+## Executar localmente
 
-- Endereço HTTPS da aplicação, para `APP_ORIGIN`.
-- Endpoint de issuer do realm, para `OIDC_ISSUER`.
-- Client ID e segredo de um cliente OIDC confidencial.
-- Conexão PostgreSQL e certificados da autoridade interna, se necessários.
-- Identificador `sub` de cada conta que terá acesso; o primeiro administrador é provisionado pela linha de comando.
-
-A versão é configurável e testada, mas a conexão ao Keycloak/Windows e à infraestrutura reais da WEG depende desses dados e de homologação pela TI. Não há valores corporativos presumidos nem autenticação alternativa automática.
-
-## Executar com Node.js
-
-Requisitos: Node.js >=22.13 e PostgreSQL 16 ou 17. A integração foi verificada com PostgreSQL 17.11 real e um provedor OIDC de teste com JWTs assinados. O Keycloak real da WEG ainda precisa ser homologado.
+Requer Node.js 22.13+, PostgreSQL 17 e Redis 7.2+ (Redis 8 nos exemplos). Use um realm de desenvolvimento fornecido pela TI; não há login alternativo por senha local.
 
 ```sh
-npm ci
+npm ci --ignore-scripts
+cp .env.example .env
+cp config/access-mapping.example.json config/access-mapping.json
+```
+
+Preencha o `.env` privado e o mapeamento aprovado pela TI. O arquivo de exemplo tem `grants: []`: nenhum acesso é liberado. Não use o exemplo sintético em produção. Configure PostgreSQL/Redis locais ou suba somente a infraestrutura local:
+
+```sh
+LOCAL_DATABASE_PASSWORD='uma-senha-local' docker compose up -d
+```
+
+Use a mesma senha na URL do banco. Carregue o `.env` no terminal/processo com a ferramenta adotada pela equipe. O arquivo não é lido nem enviado ao navegador automaticamente. Em PowerShell, configure as variáveis na sessão; não publique o arquivo.
+
+```sh
+npm run generate
+npm run db:validate
+npm run db:deploy
 npm run build
+npm run dev:api
+# Em outro terminal com as mesmas variáveis:
+npm run dev:web
 ```
 
-Copie `.env.example` para `.env` e preencha os valores aprovados pela TI. O segredo do cliente deve ser configurado somente no servidor ou no gerenciador corporativo de segredos.
-
-```sh
-node --env-file=.env scripts/migrate.mjs
-node --env-file=.env scripts/provision-user.mjs --username usuario.aprovado --subject SUB_FORNECIDO_PELA_TI --name "Administrador" --general-admin
-node --env-file=.env dist/server/index.js
-```
-
-Para desenvolvimento local com um Keycloak de desenvolvimento: configure URLs HTTP somente em `localhost`/`127.0.0.1`, `NODE_ENV=development` e `ALLOW_HTTP_LOOPBACK=true`. A configuração de produção exige HTTPS.
-
-```sh
-npm run dev
-```
-
-## Executar com Docker
-
-O `compose.yaml` é uma base de homologação com PostgreSQL e aplicação. Em produção, a TI pode usar um PostgreSQL gerenciado e executar somente a imagem da aplicação.
-
-```sh
-docker compose build
-docker compose run --rm app node scripts/migrate.mjs
-docker compose run --rm app node scripts/provision-user.mjs --username usuario.aprovado --subject SUB_FORNECIDO_PELA_TI --name "Administrador" --general-admin
-docker compose up -d
-```
-
-O serviço da aplicação publica apenas `127.0.0.1:3000`. A TI deve instalar o proxy reverso e o certificado HTTPS no domínio corporativo, preservando o cabeçalho `Host` correspondente a `APP_ORIGIN`. O PostgreSQL não é exposto na configuração de exemplo. Migrações são explícitas, fora da inicialização do servidor; não existem cargas automáticas de fotos ou contas especiais.
-
-## Documentação de implantação
-
-- [Keycloak, Windows e sessões](docs/keycloak.md)
-- [Migração privada dos dados e configuração](docs/migracao.md)
-- [Ambiente, domínio, HTTPS e operação](docs/implantacao.md)
+Abra `http://localhost:3000`. A primeira estrutura é cadastrada pelo administrador autorizado externamente, em **Cadastros**. Não há dados de produção ou usuários reais no repositório.
 
 ## Validação
 
+Use **um banco exclusivo para testes** e uma instância Redis de teste. Os testes de banco criam e removem apenas esquemas aleatórios próprios. Os testes OIDC usam um provedor simulado, sem credenciais corporativas.
+
 ```sh
+npm run generate
 npm run build
+npm run typecheck:tools
 npm test
+TEST_DATABASE_URL='postgresql://usuario:senha@localhost:5432/panel_test' npm run test:integration
+TEST_REDIS_URL='redis://localhost:6379' npm run test:auth
+npx playwright install --with-deps chromium
+npm run test:ui
+npm audit --omit=dev --audit-level=high
 ```
 
-Os testes de integração exigem um PostgreSQL **descartável**, cujo usuário possa criar schemas. Eles criam/removem somente schemas de teste com nomes aleatórios e não acessam o banco atual do painel.
+Os testes de interface exercitam telas e formulários em 320, 375, 768 e 1440 pixels com dados sintéticos e API simulada; a integração de backend e OIDC é validada separadamente. Isso não substitui aceite em aparelhos e serviços WEG reais.
 
-```sh
-TEST_DATABASE_URL=postgresql://usuario:senha@127.0.0.1:5432/banco_de_teste npm run test:integration
-```
+O teste de integração é ignorado se sua URL não estiver configurada; a CI configura os serviços e executa esses testes. Build/testes genéricos não equivalem à homologação do Keycloak/WBS ou do ambiente WEG.
 
-Os testes cobrem transações e migrações PostgreSQL, consultas JSON, isolamento de seções, registros/auditoria, metas/CAP concorrentes, planejamento/Excel, importação, sessão inativa, login OIDC com PKCE, assinatura/issuer/audience/nonce/expiração, retorno de login de uso único e logout por backchannel. O Dockerfile é fornecido para a TI; a validação local do projeto executou Node.js e PostgreSQL diretamente.
+## Documentação para a TI
 
-## Recursos e direitos
+- [Modelo lógico, normalização e dicionário](docs/modelo-dados.md)
+- [Keycloak, WBS e sessões](docs/keycloak.md)
+- [Implantação, GitLab, Docker, Kubernetes e e-mail](docs/implantacao.md)
+- [Migração privada e reconciliação](docs/migracao.md)
+- [Pendências e critérios de aceite WEG](docs/pendencias-weg.md)
 
-O código deste repositório público não inclui autorização de uso da marca WEG por terceiros. Marcas, símbolos e recursos visuais pertencem aos respectivos titulares. Licenças de fontes estão em `public/brand`. Este repositório não declara aprovação institucional ou certificação de segurança.
+A versão anterior deste repositório permanece no histórico Git e na tag `v1-legacy-baseline`. Sua migração antiga, que mantinha usuários/permissões locais, foi removida da árvore ativa. Não execute migrações dessa tag sobre o novo esquema.
