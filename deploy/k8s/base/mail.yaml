@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: panel-mail
+spec:
+  schedule: "*/2 * * * *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            { app: panel-mail, app.kubernetes.io/part-of: panel-production }
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            {
+              runAsNonRoot: true,
+              runAsUser: 1000,
+              runAsGroup: 1000,
+              fsGroup: 1000,
+              seccompProfile: { type: RuntimeDefault },
+            }
+          containers:
+            - name: mail
+              image: PANEL_API
+              command: ["node", "apps/api/dist/mail.js"]
+              envFrom:
+                - configMapRef: { name: panel-runtime }
+                - secretRef: { name: panel-mail-secrets }
+              securityContext:
+                {
+                  allowPrivilegeEscalation: false,
+                  readOnlyRootFilesystem: true,
+                  capabilities: { drop: [ALL] },
+                }
+              resources:
+                requests: { cpu: 50m, memory: 128Mi }
+                limits: { cpu: 500m, memory: 384Mi }
+              volumeMounts: [{ name: temporary, mountPath: /tmp }]
+          volumes: [{ name: temporary, emptyDir: { sizeLimit: 64Mi } }]

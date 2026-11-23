@@ -1,0 +1,6 @@
+{
+  "clientId": "REPLACE_ME_WEB_CLIENT",
+  "groupsClaim": "groups",
+  "scopeClaim": "unitScopes",
+  "grants": []
+}

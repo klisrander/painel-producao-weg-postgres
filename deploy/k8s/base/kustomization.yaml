@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  [
+    services.yaml,
+    deployments.yaml,
+    migration.yaml,
+    mail.yaml,
+    ingress.yaml,
+    network.yaml,
+  ]
+configMapGenerator:
+  - name: panel-runtime
+    literals:
+      - APP_URL=https://panel.example.invalid
+      - API_INTERNAL_URL=http://panel-api:4000
+      - OIDC_ISSUER=https://keycloak.example.invalid/realms/REPLACE_ME
+      - OIDC_CLIENT_ID=REPLACE_ME_WEB_CLIENT
+      - OIDC_API_AUDIENCE=REPLACE_ME_API_AUDIENCE
+      - OIDC_INTROSPECTION_ENABLED=true
+      - ACCESS_MAPPING_FILE=/etc/panel/access-mapping.json
+      - MAIL_ENABLED=false
+      - MAIL_ALLOWED_DOMAINS=
+      - MAIL_FROM=
+      - SMTP_HOST=
+      - SMTP_PORT=587
+  - name: panel-access
+    files: [access-mapping.json]
+generatorOptions:
+  labels:
+    panel.component: config

@@ -1,0 +1,6 @@
+{
+  "extends": "../apps/api/tsconfig.json",
+  "compilerOptions": { "rootDir": "..", "noEmit": true },
+  "include": ["v2/**/*.ts"],
+  "exclude": ["../node_modules"]
+}

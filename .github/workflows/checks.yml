@@ -1,31 +1,53 @@
-name: Checks
-on: [push, pull_request]
+name: Corporate platform checks
+on:
+  push:
+  pull_request:
 permissions:
   contents: read
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        image: postgres:17-alpine
         env:
-          POSTGRES_USER: synthetic_ci
-          POSTGRES_PASSWORD: synthetic_ci_password
-          POSTGRES_DB: synthetic_ci
-        ports:
-          - 5432:5432
+          POSTGRES_USER: panel
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: panel_test
+        ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U synthetic_ci -d synthetic_ci"
-          --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "pg_isready -U panel -d panel_test"
+          --health-interval 5s --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 10
     env:
-      TEST_DATABASE_URL: postgresql://synthetic_ci:synthetic_ci_password@127.0.0.1:5432/synthetic_ci
+      DATABASE_URL: postgresql://panel:synthetic-ci-only@localhost:5432/panel_test
+      TEST_DATABASE_URL: postgresql://panel:synthetic-ci-only@localhost:5432/panel_test
+      TEST_REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+      - run: npm run generate
+      - run: npm run db:validate
       - run: npm run build
+      - run: npm run typecheck:tools
       - run: npm test
       - run: npm run test:integration
+      - run: npm run test:auth
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+      - run: kubectl kustomize deploy/k8s/overlays/homologation > /tmp/homologation.yaml
+      - run: kubectl kustomize deploy/k8s/overlays/production > /tmp/production.yaml
+      - run: npm audit --omit=dev --audit-level=high
+      - run: docker build -f deploy/Dockerfile.api --target runtime -t panel-api:test .
+      - run: docker build -f deploy/Dockerfile.web -t panel-web:test .
+      - run: docker run --rm -e PORT=3000 -d --name panel-web-smoke -p 3000:3000 panel-web:test
+      - run: node scripts/v2/wait-http.mjs http://127.0.0.1:3000/api/health
+      - run: docker stop panel-web-smoke
+        if: always()

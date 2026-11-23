@@ -1,0 +1,433 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TargetVersionKind {
+  CONFIGURATION
+  SNAPSHOT
+}
+
+enum QuantityMode {
+  TOTAL
+  GOOD
+}
+
+enum ActionKind {
+  OVERTIME
+  CAPACITY
+  MATERIAL
+  PEOPLE
+  MAINTENANCE
+  OTHER
+}
+
+enum ActionStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ActionCalendar {
+  ALL
+  WEEKDAYS
+  SATURDAY
+}
+
+enum MailStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
+model Organization {
+  id    String @id @default(uuid()) @db.Uuid
+  code  String @unique @db.VarChar(50)
+  name  String @db.VarChar(160)
+  units Unit[]
+}
+
+model Unit {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  code           String            @db.VarChar(50)
+  accessKey      String            @unique @db.VarChar(100)
+  name           String            @db.VarChar(160)
+  timeZone       String            @default("America/Sao_Paulo") @db.VarChar(80)
+  factories      Factory[]
+  shifts         Shift[]
+  reasons        StopReason[]
+  recipients     ReportRecipient[]
+
+  @@unique([organizationId, code])
+}
+
+model Factory {
+  id     String @id @default(uuid()) @db.Uuid
+  unitId String @db.Uuid
+  unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  code   String @db.VarChar(50)
+  name   String @db.VarChar(160)
+  areas  Area[]
+
+  @@unique([unitId, code])
+}
+
+model Area {
+  id        String         @id @default(uuid()) @db.Uuid
+  factoryId String         @db.Uuid
+  factory   Factory        @relation(fields: [factoryId], references: [id], onDelete: Restrict)
+  code      String         @db.VarChar(50)
+  name      String         @db.VarChar(160)
+  lines     Line[]
+  stages    ProcessStage[]
+  plans     RecoveryPlan[]
+
+  @@unique([factoryId, code])
+}
+
+model Line {
+  id           String                @id @default(uuid()) @db.Uuid
+  areaId       String                @db.Uuid
+  area         Area                  @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  code         String                @db.VarChar(50)
+  name         String                @db.VarChar(160)
+  stages       LineStage[]
+  equipment    Equipment[]
+  planVersions RecoveryPlanVersion[]
+  actions      RecoveryAction[]
+
+  @@unique([areaId, code])
+}
+
+model ProcessStage {
+  id           String                @id @default(uuid()) @db.Uuid
+  areaId       String                @db.Uuid
+  area         Area                  @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  code         String                @db.VarChar(50)
+  name         String                @db.VarChar(160)
+  translations StageTranslation[]
+  lines        LineStage[]
+  planVersions RecoveryPlanVersion[]
+
+  @@unique([areaId, code])
+}
+
+model StageTranslation {
+  stageId String       @db.Uuid
+  stage   ProcessStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  locale  String       @db.VarChar(10)
+  label   String       @db.VarChar(160)
+
+  @@id([stageId, locale])
+}
+
+model LineStage {
+  id          String            @id @default(uuid()) @db.Uuid
+  lineId      String            @db.Uuid
+  line        Line              @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  stageId     String            @db.Uuid
+  stage       ProcessStage      @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  targets     TargetSchedule[]
+  productions ProductionEntry[]
+
+  @@unique([lineId, stageId])
+}
+
+model Equipment {
+  id         String      @id @default(uuid()) @db.Uuid
+  lineId     String      @db.Uuid
+  line       Line        @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  code       String      @db.VarChar(60)
+  name       String      @db.VarChar(200)
+  workCenter String?     @db.VarChar(60)
+  assetCode  String?     @db.VarChar(100)
+  stops      StopEntry[]
+
+  @@unique([lineId, code])
+}
+
+model Shift {
+  id            String              @id @default(uuid()) @db.Uuid
+  unitId        String              @db.Uuid
+  unit          Unit                @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  code          String              @db.VarChar(30)
+  name          String              @db.VarChar(100)
+  startMinute   Int                 @db.SmallInt
+  endMinute     Int                 @db.SmallInt
+  calendarRules ShiftCalendarRule[]
+  targets       TargetSchedule[]
+  productions   ProductionEntry[]
+  stops         StopEntry[]
+
+  @@unique([unitId, code])
+}
+
+model ShiftCalendarRule {
+  id            String   @id @default(uuid()) @db.Uuid
+  shiftId       String   @db.Uuid
+  shift         Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  weekday       Int      @db.SmallInt
+  anchorDate    DateTime @db.Date
+  intervalWeeks Int      @default(1) @db.SmallInt
+  enabled       Boolean  @default(true)
+  startMinute   Int?     @db.SmallInt
+  endMinute     Int?     @db.SmallInt
+
+  @@unique([shiftId, weekday, anchorDate])
+}
+
+// Attribution only: no passwords, roles, memberships or administrator flags.
+model Actor {
+  id             String                @id @default(uuid()) @db.Uuid
+  issuer         String                @db.VarChar(500)
+  subject        String                @db.VarChar(255)
+  displayName    String                @db.VarChar(160)
+  productions    ProductionEntry[]
+  stops          StopEntry[]
+  targetVersions TargetVersion[]
+  planVersions   RecoveryPlanVersion[]
+  audit          AuditEvent[]
+
+  @@unique([issuer, subject])
+}
+
+model TargetSchedule {
+  id          String          @id @default(uuid()) @db.Uuid
+  lineStageId String          @db.Uuid
+  lineStage   LineStage       @relation(fields: [lineStageId], references: [id], onDelete: Restrict)
+  shiftId     String          @db.Uuid
+  shift       Shift           @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  revision    Int             @default(0)
+  versions    TargetVersion[]
+
+  @@unique([lineStageId, shiftId])
+}
+
+model TargetVersion {
+  id                String            @id @default(uuid()) @db.Uuid
+  scheduleId        String            @db.Uuid
+  schedule          TargetSchedule    @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  revision          Int
+  kind              TargetVersionKind @default(CONFIGURATION)
+  effectiveFrom     DateTime          @db.Date
+  enabled           Boolean           @default(true)
+  capacity          Int?
+  efficiencyPercent Decimal?          @db.Decimal(5, 2)
+  quantityTarget    Int?
+  actorId           String            @db.Uuid
+  actor             Actor             @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  productions       ProductionEntry[]
+
+  @@unique([scheduleId, revision])
+  @@index([scheduleId, effectiveFrom, revision])
+}
+
+model ProductionEntry {
+  id              String         @id @default(uuid()) @db.Uuid
+  operationDate   DateTime       @db.Date
+  lineStageId     String         @db.Uuid
+  lineStage       LineStage      @relation(fields: [lineStageId], references: [id], onDelete: Restrict)
+  shiftId         String         @db.Uuid
+  shift           Shift          @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  quantity        Int
+  defects         Int            @default(0)
+  recovery        Boolean        @default(false)
+  targetVersionId String?        @db.Uuid
+  targetVersion   TargetVersion? @relation(fields: [targetVersionId], references: [id], onDelete: Restrict)
+  actorId         String         @db.Uuid
+  actor           Actor          @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
+  version         Int            @default(1)
+
+  @@index([lineStageId, operationDate, shiftId])
+}
+
+model StopReason {
+  id           String              @id @default(uuid()) @db.Uuid
+  unitId       String              @db.Uuid
+  unit         Unit                @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  code         String              @db.VarChar(60)
+  name         String              @db.VarChar(160)
+  translations ReasonTranslation[]
+  stops        StopEntry[]
+
+  @@unique([unitId, code])
+}
+
+model ReasonTranslation {
+  reasonId String     @db.Uuid
+  reason   StopReason @relation(fields: [reasonId], references: [id], onDelete: Cascade)
+  locale   String     @db.VarChar(10)
+  label    String     @db.VarChar(160)
+
+  @@id([reasonId, locale])
+}
+
+model StopEntry {
+  id                      String     @id @default(uuid()) @db.Uuid
+  equipmentId             String     @db.Uuid
+  equipment               Equipment  @relation(fields: [equipmentId], references: [id], onDelete: Restrict)
+  reasonId                String     @db.Uuid
+  reason                  StopReason @relation(fields: [reasonId], references: [id], onDelete: Restrict)
+  shiftId                 String     @db.Uuid
+  shift                   Shift      @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  operationDate           DateTime   @db.Date
+  comment                 String     @db.VarChar(500)
+  reportedDurationMinutes Int?
+  startedAt               DateTime?  @db.Timestamptz(3)
+  endedAt                 DateTime?  @db.Timestamptz(3)
+  actorId                 String     @db.Uuid
+  actor                   Actor      @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt               DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime   @updatedAt @db.Timestamptz(3)
+  version                 Int        @default(1)
+
+  @@index([equipmentId, operationDate, shiftId])
+}
+
+model RecoveryPlan {
+  id              String                @id @default(uuid()) @db.Uuid
+  areaId          String                @db.Uuid
+  area            Area                  @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  currentRevision Int                   @default(0)
+  versions        RecoveryPlanVersion[]
+}
+
+model RecoveryPlanVersion {
+  id             String           @id @default(uuid()) @db.Uuid
+  planId         String           @db.Uuid
+  plan           RecoveryPlan     @relation(fields: [planId], references: [id], onDelete: Restrict)
+  revision       Int
+  name           String           @db.VarChar(100)
+  stageId        String           @db.Uuid
+  stage          ProcessStage     @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  lineId         String?          @db.Uuid
+  line           Line?            @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  startDate      DateTime         @db.Date
+  initialBacklog Int
+  quantityMode   QuantityMode     @default(TOTAL)
+  archived       Boolean          @default(false)
+  note           String           @default("") @db.VarChar(500)
+  actorId        String           @db.Uuid
+  actor          Actor            @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  days           PlanDay[]
+  actions        RecoveryAction[]
+  costs          PlanCosts?
+
+  @@unique([planId, revision])
+}
+
+model PlanDay {
+  id               String              @id @default(uuid()) @db.Uuid
+  versionId        String              @db.Uuid
+  version          RecoveryPlanVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  date             DateTime            @db.Date
+  demand           Int?
+  forecast         Int?
+  actualOverride   Int?
+  actualReason     String              @default("") @db.VarChar(500)
+  adjustment       Int                 @default(0)
+  adjustmentReason String              @default("") @db.VarChar(500)
+  note             String              @default("") @db.VarChar(500)
+  closed           Boolean             @default(false)
+  recoveryOnly     Boolean             @default(false)
+
+  @@unique([versionId, date])
+}
+
+model RecoveryAction {
+  id          String              @id @default(uuid()) @db.Uuid
+  versionId   String              @db.Uuid
+  version     RecoveryPlanVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  lineId      String?             @db.Uuid
+  line        Line?               @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  title       String              @db.VarChar(150)
+  kind        ActionKind          @default(OTHER)
+  status      ActionStatus        @default(PLANNED)
+  calendar    ActionCalendar      @default(ALL)
+  startDate   DateTime            @db.Date
+  endDate     DateTime            @db.Date
+  responsible String              @default("") @db.VarChar(100)
+  extraUnits  Int                 @default(0)
+  costPerDay  Decimal             @default(0) @db.Decimal(14, 2)
+  note        String              @default("") @db.VarChar(500)
+}
+
+model PlanCosts {
+  versionId  String              @id @db.Uuid
+  version    RecoveryPlanVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  hourly     Decimal             @default(0) @db.Decimal(14, 4)
+  premium    Decimal             @default(2) @db.Decimal(10, 4)
+  charges    Decimal             @default(1.7445) @db.Decimal(10, 4)
+  dsm        Decimal             @default(1.2) @db.Decimal(10, 4)
+  hours      Decimal             @default(8.8) @db.Decimal(8, 4)
+  food       Decimal             @default(0) @db.Decimal(14, 2)
+  people     Int                 @default(0)
+  volume     Int                 @default(0)
+  dailyExtra Int                 @default(0)
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String   @db.Uuid
+  actor      Actor    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  unitKey    String?  @db.VarChar(100)
+  entityType String   @db.VarChar(60)
+  entityId   String   @db.VarChar(100)
+  action     String   @db.VarChar(60)
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
+  before     Json?
+  after      Json?
+
+  @@index([unitKey, occurredAt])
+}
+
+model LegacyReference {
+  source     String @db.VarChar(100)
+  entityType String @db.VarChar(60)
+  sourceId   String @db.VarChar(100)
+  targetId   String @db.Uuid
+  checksum   String @db.Char(64)
+
+  @@id([source, entityType, sourceId])
+}
+
+model ReportRecipient {
+  id       String       @id @default(uuid()) @db.Uuid
+  unitId   String       @db.Uuid
+  unit     Unit         @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  address  String       @db.VarChar(254)
+  locale   String       @default("pt-BR") @db.VarChar(10)
+  enabled  Boolean      @default(true)
+  messages MailOutbox[]
+
+  @@unique([unitId, address])
+}
+
+model MailOutbox {
+  id          String          @id @default(uuid()) @db.Uuid
+  recipientId String          @db.Uuid
+  recipient   ReportRecipient @relation(fields: [recipientId], references: [id], onDelete: Restrict)
+  subject     String          @db.VarChar(250)
+  text        String          @db.Text
+  status      MailStatus      @default(PENDING)
+  attempts    Int             @default(0)
+  availableAt DateTime        @default(now()) @db.Timestamptz(3)
+  claimedAt   DateTime?       @db.Timestamptz(3)
+  sentAt      DateTime?       @db.Timestamptz(3)
+  lastError   String?         @db.VarChar(100)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@index([status, availableAt])
+}

@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: panel-web
+spec:
+  # Set ingressClassName to the class approved by WEG.
+  tls:
+    - hosts: [panel.example.invalid]
+      secretName: panel-tls
+  rules:
+    - host: panel.example.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: panel-web
+                port: { number: 3000 }
