@@ -9,7 +9,7 @@ export function metrics(
 ) {
   const target =
     capacity != null && rate != null
-      ? Math.ceil((capacity * rate) / 100)
+      ? Math.ceil((capacity * Math.round(rate * 100)) / 10000)
       : legacyTarget;
   return {
     quantity,
@@ -25,6 +25,7 @@ export function metrics(
 export function actionApplies(a: ActionInput, date: string) {
   const weekday = new Date(date + "T12:00:00Z").getUTCDay();
   return (
+    a.included !== false &&
     a.status !== "CANCELLED" &&
     date >= a.startDate &&
     date <= a.endDate &&
@@ -154,7 +155,7 @@ export function csvCell(value: unknown) {
   const text = String(value ?? "");
   return (
     '"' +
-    (/^[\s]*[=+@-]/.test(text) ? "'" : "") +
+    (typeof value === "string" && /^[\s]*[=+@-]/.test(text) ? "'" : "") +
     text.replaceAll('"', '""') +
     '"'
   );

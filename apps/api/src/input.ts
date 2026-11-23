@@ -120,6 +120,7 @@ export const actionInput = z
     title: text(150),
     kind: z.enum(actionKinds),
     status: z.enum(actionStatuses),
+    included: z.boolean().default(true),
     calendar: z.enum(calendars),
     startDate: date,
     endDate: date,

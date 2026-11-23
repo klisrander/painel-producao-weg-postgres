@@ -155,6 +155,32 @@ export async function importLegacy(
         endedAt: convert(d.fim),
       });
     } else throw Error("unknown_legacy_record_kind");
+    if (record.kind === "producao") {
+      targetInput.parse({
+        lineStageId: ls!.id,
+        shiftId: base.shiftId,
+        effectiveFrom: base.operationDate,
+        enabled: d.capacity != null || d.meta != null,
+        capacity: d.capacity == null ? null : Number(d.capacity),
+        efficiencyPercent:
+          d.efficiency_target == null ? null : Number(d.efficiency_target),
+        quantityTarget:
+          d.capacity != null ? null : d.meta == null ? null : Number(d.meta),
+        expectedRevision: 0,
+      });
+      if (
+        d.capacity != null &&
+        d.efficiency_target != null &&
+        d.meta != null &&
+        Number(d.meta) !==
+          Math.ceil(
+            (Number(d.capacity) *
+              Math.round(Number(d.efficiency_target) * 100)) /
+              10000,
+          )
+      )
+        throw Error("legacy_target_mismatch:" + record.id);
+    }
     const createdAt = at(record.created, String(d.data) + "T12:00:00Z"),
       updatedAt = at(record.updated, createdAt.toISOString());
     prepared.push({
@@ -248,10 +274,8 @@ export async function importLegacy(
         lineId: a.line ? match(m.lines, a.line, "line") : null,
         title: a.title,
         kind: kind[String(a.kind)] || "OTHER",
-        status:
-          a.include === false
-            ? "CANCELLED"
-            : status[String(a.status)] || "PLANNED",
+        status: status[String(a.status)] || "PLANNED",
+        included: a.include === true,
         calendar: calendar[String(a.schedule)] || "ALL",
         startDate: a.start,
         endDate: a.end || a.start,

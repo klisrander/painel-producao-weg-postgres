@@ -621,7 +621,46 @@ test(
               },
             ],
             performance_changes: [],
-            projection_plans: [],
+            projection_plans: [
+              {
+                id: "legacy-plan",
+                section: "sample",
+                name: "Legacy scenario",
+                stage: "Stage",
+                start_date: "2026-11-16",
+                initial_backlog: 100,
+                revision: 1,
+                actor: "Legacy author",
+                created: "2026-11-16T12:00:00Z",
+                data: JSON.stringify({
+                  line: "Line",
+                  quantity_mode: "total",
+                  rows: [
+                    {
+                      date: "2026-11-16",
+                      demand: 20,
+                      forecast: 20,
+                      actual: null,
+                      adjustment: 0,
+                    },
+                  ],
+                  actions: [
+                    {
+                      title: "Excluded action",
+                      kind: "HE",
+                      status: "Planejada",
+                      include: false,
+                      schedule: "todos",
+                      start: "2026-11-16",
+                      end: "2026-11-16",
+                      extra_units: 100,
+                      daily_cost: 10,
+                    },
+                  ],
+                  costs: {},
+                }),
+              },
+            ],
             projection_revisions: [],
             audit: [
               {
@@ -662,6 +701,27 @@ test(
             where: { entityType: "legacy-record" },
           });
           assert.equal(JSON.stringify(audit).includes("never-import"), false);
+          const importedAction = await db.recoveryAction.findFirstOrThrow({
+            where: { title: "Excluded action" },
+          });
+          assert.equal(importedAction.status, "PLANNED");
+          assert.equal(importedAction.included, false);
+          const mismatch = structuredClone(backup);
+          mismatch.records[0].data = JSON.stringify({
+            data: "2026-11-16",
+            linha: "Line",
+            etapa: "Stage",
+            turno: "1",
+            producao: 10,
+            defeitos: 1,
+            capacity: 250,
+            efficiency_target: 64.4,
+            meta: 162,
+          });
+          await assert.rejects(
+            () => importLegacy(db, mismatch, mapping),
+            /legacy_target_mismatch/,
+          );
           const changed = structuredClone(backup);
           changed.records[0].data = changed.records[0].data.replace(
             '"producao":10',

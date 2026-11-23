@@ -199,6 +199,7 @@ export const pt = {
   daily: "Por dia",
   compare: "Comparar cenário",
   noComparison: "Sem comparação",
+  includeAction: "Considerar na projeção",
 } as const;
 export type Key = keyof typeof pt;
 const en: Record<Key, string> = {
@@ -397,6 +398,7 @@ const en: Record<Key, string> = {
   daily: "Per day",
   compare: "Compare scenario",
   noComparison: "No comparison",
+  includeAction: "Include in projection",
 };
 const es: Record<Key, string> = {
   ...en,
@@ -597,6 +599,7 @@ const es: Record<Key, string> = {
   daily: "Por día",
   compare: "Comparar escenario",
   noComparison: "Sin comparación",
+  includeAction: "Incluir en la proyección",
 };
 export const dictionaries: Record<Locale, Record<Key, string>> = {
   "pt-BR": pt,

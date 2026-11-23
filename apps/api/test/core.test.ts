@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mappingSchema, principalFromClaims, inUnit } from "../src/policy.js";
 import { productionInput, stopInput, planInput } from "../src/input.js";
-import { metrics, project, csv, workbook } from "@panel/domain";
+import { actionApplies, metrics, project, csv, workbook } from "@panel/domain";
 import { shiftWindow } from "../dist/service.js";
 const mapping = mappingSchema.parse({
   clientId: "test-client",
@@ -270,4 +270,30 @@ test("client role lookup treats client IDs containing dots as literal keys", () 
     map,
   );
   assert.deepEqual(p.permissions, ["production.read"]);
+});
+
+test("decimal efficiency targets avoid floating-point round-up errors and CSV preserves negative numbers", () => {
+  assert.equal(metrics(0, 0, 250, 64.4).target, 161);
+  assert.equal(csv([[-100, "-100"]]), '\uFEFF"-100";"\'-100"');
+});
+
+test("a planned action may be excluded from a scenario without cancelling it", () => {
+  const action = {
+    included: false,
+    title: "Recovery",
+    kind: "OVERTIME" as const,
+    status: "PLANNED" as const,
+    calendar: "ALL" as const,
+    startDate: "2026-11-17",
+    endDate: "2026-11-18",
+    responsible: "",
+    extraUnits: 100,
+    costPerDay: 10,
+    note: "",
+  };
+  assert.equal(actionApplies(action, "2026-11-17"), false);
+  assert.equal(
+    actionApplies({ ...action, included: true }, "2026-11-17"),
+    true,
+  );
 });

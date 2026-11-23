@@ -43,7 +43,7 @@ npm run import:legacy -- --backup private/backup.json --mapping private/mapping.
 
 O backup JSON deve conter arrays `users`, `records`, `goal_changes`, `performance_changes`, `projection_plans`, `projection_revisions` e `audit`, mesmo quando vazios. Um arquivo pode reunir as seções; arquivos separados requerem IDs de origem sem conflito ou namespaces `source` distintos, definidos de forma estável. Nunca trocar `source` só para contornar um erro de reimportação.
 
-A simulação valida formato, contagens, recursos e limites de unidade/área. A transação real ainda pode rejeitar constraints ou concorrência; simulação não é garantia de sucesso da aplicação. A carga usa lock de migração e uma transação serializável; falhas não deixam uma carga parcial. Para volume elevado, dimensionar a janela/timeout e ensaiar com cópia representativa.
+A simulação valida formato, contagens, recursos e limites de unidade/área. Se uma meta histórica em peças divergir da CAP e do percentual informados no mesmo registro, a carga é rejeitada com `legacy_target_mismatch` para reconciliação; o importador não corrige essa divergência silenciosamente. A transação real ainda pode rejeitar constraints ou concorrência; simulação não é garantia de sucesso da aplicação. A carga usa lock de migração e uma transação serializável; falhas não deixam uma carga parcial. Para volume elevado, dimensionar a janela/timeout e ensaiar com cópia representativa.
 
 ## O que é preservado
 

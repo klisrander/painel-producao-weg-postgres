@@ -99,6 +99,7 @@ function editVersion(v: Version): PlanInput {
       title: a.title,
       kind: a.kind,
       status: a.status,
+      included: a.included ?? true,
       calendar: a.calendar,
       startDate: datePart(a.startDate),
       endDate: datePart(a.endDate),
@@ -690,6 +691,16 @@ export function PlanEditor({
                     />
                   </Field>
                 ))}
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={a.included}
+                    onChange={(e) =>
+                      changeAction(i, { included: e.target.checked })
+                    }
+                  />
+                  {t("includeAction")}
+                </label>
                 <Field label={t("responsible")}>
                   <input
                     value={a.responsible}
@@ -747,6 +758,7 @@ export function PlanEditor({
                   title: "",
                   kind: "OVERTIME",
                   status: "PLANNED",
+                  included: true,
                   calendar: "ALL",
                   startDate: draft.startDate,
                   endDate: draft.startDate,

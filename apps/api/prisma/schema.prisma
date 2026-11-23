@@ -355,6 +355,7 @@ model RecoveryAction {
   title       String              @db.VarChar(150)
   kind        ActionKind          @default(OTHER)
   status      ActionStatus        @default(PLANNED)
+  included    Boolean             @default(true)
   calendar    ActionCalendar      @default(ALL)
   startDate   DateTime            @db.Date
   endDate     DateTime            @db.Date

@@ -93,6 +93,7 @@ export interface PlanDayInput {
   recoveryOnly: boolean;
 }
 export interface ActionInput {
+  included: boolean;
   id?: string;
   lineId?: string | null;
   title: string;

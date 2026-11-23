@@ -282,6 +282,7 @@ CREATE TABLE "RecoveryAction" (
     "title" VARCHAR(150) NOT NULL,
     "kind" "ActionKind" NOT NULL DEFAULT 'OTHER',
     "status" "ActionStatus" NOT NULL DEFAULT 'PLANNED',
+    "included" BOOLEAN NOT NULL DEFAULT true,
     "calendar" "ActionCalendar" NOT NULL DEFAULT 'ALL',
     "startDate" DATE NOT NULL,
     "endDate" DATE NOT NULL,
