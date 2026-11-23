@@ -245,3 +245,29 @@ test("Excel output contains worksheet relationships and a chart without executin
   assert.match(text, /dispBlanksAs val="gap"/);
   assert.match(text, /t="inlineStr"/);
 });
+
+test("client role lookup treats client IDs containing dots as literal keys", () => {
+  const map = mappingSchema.parse({
+    clientId: "panel.production",
+    groupsClaim: "groups",
+    scopeClaim: "units",
+    grants: [
+      {
+        role: "reader",
+        groups: ["approved"],
+        permissions: ["production.read"],
+      },
+    ],
+  });
+  const p = principalFromClaims(
+    {
+      iss: "https://issuer.example",
+      sub: "u",
+      resource_access: { "panel.production": { roles: ["reader"] } },
+      groups: ["approved"],
+      units: ["unit-a"],
+    },
+    map,
+  );
+  assert.deepEqual(p.permissions, ["production.read"]);
+});

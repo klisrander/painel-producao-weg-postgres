@@ -279,7 +279,7 @@ try {
     });
     await page.goto(base);
     await page
-      .getByRole("heading", { name: "Evolução", exact: true })
+      .getByRole("heading", { name: "Evolução", exact: true, level: 1 })
       .waitFor();
     async function fitted(label) {
       await page.waitForTimeout(50);

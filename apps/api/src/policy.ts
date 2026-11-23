@@ -37,10 +37,17 @@ export function principalFromClaims(
   map: AccessMapping,
 ): Principal {
   if (!c.iss || !c.sub) throw Error("invalid_identity");
+  const clients = c.resource_access as Record<string, unknown> | undefined;
+  const client =
+    clients &&
+    typeof clients === "object" &&
+    Object.hasOwn(clients, map.clientId)
+      ? clients[map.clientId]
+      : undefined;
   const roles = [
     ...new Set([
       ...strings(path(c, "realm_access.roles")),
-      ...strings(path(c, `resource_access.${map.clientId}.roles`)),
+      ...strings(path(client, "roles")),
     ]),
   ];
   const groups = strings(path(c, map.groupsClaim)),
