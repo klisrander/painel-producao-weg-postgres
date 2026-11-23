@@ -50,3 +50,29 @@ export function cookie(req: Request, name = cookieName()) {
 export function cookieHeader(name: string, value: string, seconds: number) {
   return `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${seconds}${secure() ? "; Secure" : ""}`;
 }
+
+export class BodyTooLarge extends Error {}
+export async function limitedBody(req: Request, limit: number) {
+  const size = Number(req.headers.get("content-length") || 0);
+  if (size > limit) throw new BodyTooLarge();
+  const reader = req.body?.getReader();
+  if (!reader) return "";
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let total = 0,
+    text = "";
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      total += chunk.value.byteLength;
+      if (total > limit) {
+        await reader.cancel();
+        throw new BodyTooLarge();
+      }
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}

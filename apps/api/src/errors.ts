@@ -9,6 +9,11 @@ import { ZodError } from "zod";
 export class ApiErrors implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
     const res = host.switchToHttp().getResponse();
+    const parserType = (error as { type?: string })?.type;
+    if (parserType === "entity.too.large")
+      return res.status(413).json({ code: "payload_too_large" });
+    if (parserType === "entity.parse.failed")
+      return res.status(400).json({ code: "validation_failed" });
     if (error instanceof ZodError)
       return res.status(400).json({
         code: "validation_failed",

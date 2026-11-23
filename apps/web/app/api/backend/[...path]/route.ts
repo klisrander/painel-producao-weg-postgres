@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "../../../../lib/session";
-import { sameOrigin } from "../../../../lib/security";
+import {
+  sameOrigin,
+  limitedBody,
+  BodyTooLarge,
+} from "../../../../lib/security";
 export const runtime = "nodejs";
 async function proxy(
   req: Request,
@@ -47,13 +51,7 @@ async function proxy(
           { code: "invalid_content_type" },
           { status: 415 },
         );
-      const bytes = await req.arrayBuffer();
-      if (bytes.byteLength > 524288)
-        return NextResponse.json(
-          { code: "payload_too_large" },
-          { status: 413 },
-        );
-      body = new TextDecoder().decode(bytes);
+      body = await limitedBody(req, 524288);
     }
     const response = await fetch(url, {
       method: req.method,
@@ -77,7 +75,9 @@ async function proxy(
       status: response.status,
       headers,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof BodyTooLarge)
+      return NextResponse.json({ code: "payload_too_large" }, { status: 413 });
     return NextResponse.json({ code: "service_unavailable" }, { status: 503 });
   }
 }

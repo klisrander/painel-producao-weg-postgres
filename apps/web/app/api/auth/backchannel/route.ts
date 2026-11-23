@@ -1,11 +1,11 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { digest } from "../../../../lib/security";
+import { digest, limitedBody, BodyTooLarge } from "../../../../lib/security";
 import { provider, store } from "../../../../lib/session";
 let jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
 export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
-    const body = await req.text();
+    const body = await limitedBody(req, 32768);
     if (body.length > 32768) return new Response(null, { status: 413 });
     const value = new URLSearchParams(body).get("logout_token");
     if (!value) return new Response(null, { status: 400 });
@@ -49,7 +49,9 @@ export async function POST(req: Request) {
     if (sessions.length) await redis.del(sessions);
     await redis.del(index);
     return new Response(null, { status: 200 });
-  } catch {
+  } catch (error) {
+    if (error instanceof BodyTooLarge)
+      return new Response(null, { status: 413 });
     return new Response(null, { status: 400 });
   }
 }

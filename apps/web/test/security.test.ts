@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  limitedBody,
+  BodyTooLarge,
   random,
   seal,
   unseal,
@@ -85,4 +87,19 @@ test("all UI dictionaries cover every key", () => {
     for (const value of Object.values(dictionary))
       assert.equal(typeof value, "string");
   }
+});
+
+test("streamed requests enforce size limits before buffering the full body", async () => {
+  const request = new Request("https://example.invalid", {
+    method: "POST",
+    body: "123456",
+  });
+  await assert.rejects(() => limitedBody(request, 5), BodyTooLarge);
+  assert.equal(
+    await limitedBody(
+      new Request("https://example.invalid", { method: "POST", body: "12345" }),
+      5,
+    ),
+    "12345",
+  );
 });
